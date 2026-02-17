@@ -466,11 +466,11 @@
         html += `<div class="small">`;
       
         if (prev[k] > 0 && shift[1] === k)
-          html += `含上個月連 `;
+          html += `含上個月連`;
         else if (prev[k] < 0 && shift[1] !== k)
-          html += `含上個月連 `;
+          html += `含上個月連`;
         else if (prev[k] !== 0)
-          html += `上個月 `;
+          html += `上個月`;
       
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
