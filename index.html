@@ -341,14 +341,14 @@
       runBtn.disabled = true;
       warnBox.innerHTML =
         `<span class="err">⚠️ 班數總和不正確：</span>` +
-        `需要排班 <b>${gridDays}</b> 天（含星期日），免排 <b>${skipCount}</b> 天 → ` +
-        `實際需排 <b>${requiredWorkDays}</b> 天；` +
+        `需要排班 <b>${gridDays}</b> 班（含星期日），免排 <b>${skipCount}</b> 班 → ` +
+        `實際需排 <b>${requiredWorkDays}</b> 班；` +
         `但人員1+人員2 = <b>${assigned}</b>（${c1}+${c2}）。` +
         `<div class="small">請調整「免排班日期」或兩位人員「預排班數」，使兩者相等。</div>`;
       return false;
     }
 
-    warnBox.innerHTML = `<span class="ok">✓ 班數總和正確：</span>實際需排 <b>${requiredWorkDays}</b> 天，已分配 <b>${assigned}</b> 天。`;
+    warnBox.innerHTML = `<span class="ok">✓ 班數總和正確：</span>實際需排 <b>${requiredWorkDays}</b> 班，已分配 <b>${assigned}</b> 班。`;
     runBtn.disabled = false;
     return true;
   }
