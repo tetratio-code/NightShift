@@ -398,46 +398,50 @@
     const sum = [0, 0, 0];
 
     function calc() {
+      // 1) 統計 seq
       for (let k = 0; k <= 2; k++) {
         let n = 0;
         for (let i = 0; i <= days; i++) seq[k][i] = 0;
         seq[k][0] = prev[k];
-
+    
         for (let i = 1; i <= days; i++) {
           if (((start + i - 1) % 8) === 7) {
             if (shift[i] === k) {
-              if (seq[k][n] > -50) seq[k][n] -= 50;
+              if (seq[k][n] > -50) seq[k][n] -= 50; // 五→日 隔1.5 的來源（-51）
               n++;
-              seq[k][n] = 50; n++;
-              seq[k][n] -= 150;
+              seq[k][n] = 50; n++;                  // 星期日白班
+              seq[k][n] -= 150;                     // 日→一 隔1.5 的來源（-151）
             }
           } else if (shift[i] === k) {
             if (seq[k][n] < 0) n++;
             seq[k][n] += 1;
-          } else if (shift[i] !== k) {
+          } else {
             if (seq[k][n] > 0) n++;
             seq[k][n] -= 1;
           }
         }
       }
-
+    
+      // 2) 計分
       let score = 0;
       for (let k = 1; k <= 2; k++) {
         for (let i = 0; i <= days; i++) {
           if (today <= days && seq[k][i + 2] === 0) break;
           if (seq[k][i] < 0 && seq[k][i + 1] === 0) break;
-        
+    
           const v = seq[k][i];
-        
+    
           if (v >= 1 && v <= 7) score += pt[k][v];
-          else if (v === 50) score += pt[k][11];        // 星期日白班（一定要在 v>7 前）
+          else if (v === 50) score += pt[k][11];        // 星期日白班
           else if (v === -51) score += pt[k][12];       // 五→日 隔1.5天
           else if (v === -151) score += pt[k][13];      // 日→一 隔1.5天
           else if (v === -1) score += pt[k][9];
           else if (v === -2) score += pt[k][10];
-          else if (v > 7) score += pt[k][8];            // 上>7天（最後）
+          else if (v > 7 && v < 50) score += pt[k][8];  // 上>7天（避免吃到 50）
         }
-
+      }
+    
+      // 3) 星期日白班平衡（只在排完時）
       let kBal = 0;
       if (today > days) {
         for (let i = 8 - start; i <= days; i += 8) {
@@ -446,6 +450,7 @@
         }
         if ((kBal * kBal) > 2) score += 256;
       }
+    
       return score;
     }
 
