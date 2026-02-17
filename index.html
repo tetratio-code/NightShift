@@ -524,14 +524,14 @@
       // 人員 seq 摘要
       for (let k = 1; k <= 2; k++) {
         html += `<br/><div>人員${k}:</div><div class="small">`;
-        if (prev[k] > 0 && shift[1] === k) html += `含上個月連 `;
-        else if (prev[k] < 0 && shift[1] !== k) html += `含上個月連 `;
-        else if (prev[k] !== 0) html += `上個月 `;
+        if (prev[k] > 0 && shift[1] === k) html += `含上個月連`;
+        else if (prev[k] < 0 && shift[1] !== k) html += `含上個月連`;
+        else if (prev[k] !== 0) html += `上個月`;
 
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
           if (v === 50) html += `星期天白班, `;
-          else if (v < -50) html += `休${(-50 - v)}.5天, `;
+          else if (v < -50) html += `隔${(-50 - v)}.5天, `;
           else if (v < 0) html += `休${(-v)}天, `;
           else if (v > 0) html += `上${v}天, `;
         }
