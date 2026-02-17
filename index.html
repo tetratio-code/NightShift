@@ -176,14 +176,17 @@
 
   // ===== Auto grid days = monthDays + sundayCount =====
   function countSundaysInMonth(monthDays, start) {
-    // start: 1=Mon ... 7=Sun
-    // Day d (1-based) weekday = ((start-1 + (d-1)) % 7) + 1
     let c = 0;
     for (let d = 1; d <= monthDays; d++) {
-      const wd = ((start - 1 + (d - 1)) % 7) + 1;
+      const wd = ((start - 1 + (d - 1)) % 7) + 1; // 1..7
       if (wd === 7) c++;
     }
     return c;
+  }
+
+  function getGridDays(monthDays, start) {
+    const sun = countSundaysInMonth(monthDays, start);
+    return { gridDays: monthDays + sun, sunCount: sun };
   }
 
   function updateGridDaysUI() {
@@ -192,9 +195,7 @@
     if (!Number.isInteger(monthDays) || monthDays <= 0) return;
     if (!Number.isInteger(start) || start < 1 || start > 7) return;
 
-    const sunCount = countSundaysInMonth(monthDays, start);
-    const gridDays = monthDays + sunCount;
-
+    const { gridDays, sunCount } = getGridDays(monthDays, start);
     $("sunCount").textContent = String(sunCount);
     $("gridDays").textContent = String(gridDays);
   }
@@ -239,10 +240,7 @@
     function getPtArray() {
       const selects = wrap.querySelectorAll("select");
       const pt = [];
-      selects.forEach(s => {
-        const lvl = Number(s.value);
-        pt.push(pow2(lvl));
-      });
+      selects.forEach(s => pt.push(pow2(Number(s.value))));
       return pt;
     }
 
@@ -254,16 +252,100 @@
     return { getPtArray, updatePtPreview };
   }
 
-  const pt1UI = buildPtUI("ptUI1", "ptPreview1", [2,1,0,0,2,5,6,0,5,1,3,10]); // 只是預設值，可改
+  const pt1UI = buildPtUI("ptUI1", "ptPreview1", [2,1,0,0,2,5,6,0,5,1,3,10]);
   const pt2UI = buildPtUI("ptUI2", "ptPreview2", [2,1,0,0,2,5,6,0,5,1,3,10]);
 
-  // ===== Scheduler Core (ported from C, but daysAdjusted changed to monthDays + sundayCount) =====
+  // ====== 新增：班數總和檢查 + 禁用排班 ======
+  function mapDateToIndex(k, start) {
+    // 沿用你原 C 的映射方式（正數/負數）
+    if (k < 0) {
+      const d = -k;
+      return d + Math.floor((d + start - 2) / 7) + 1;
+    } else {
+      return k + Math.floor((k + start - 2) / 7);
+    }
+  }
+
+  function getUniqueValidSkipCount(skipDates, start, gridDays) {
+    // 將 skipDates 映射到 grid index，過濾 1..gridDays，並去重
+    const s = new Set();
+    for (const d of skipDates) {
+      const idx = mapDateToIndex(d, start);
+      if (idx >= 1 && idx <= gridDays) s.add(idx);
+    }
+    return s.size;
+  }
+
+  function ensureWarnBox() {
+    // 在按鈕區塊下方塞一個警告 div（只建立一次）
+    let warn = $("warnBox");
+    if (warn) return warn;
+
+    warn = document.createElement("div");
+    warn.id = "warnBox";
+    warn.style.marginTop = "8px";
+    warn.className = "hint";
+    // 插在 statusEl 前面（也就是按鈕下方、status 上方/同區）
+    statusEl.parentNode.insertBefore(warn, statusEl);
+    return warn;
+  }
+
+  function validateTotalsAndToggleRun() {
+    const warnBox = ensureWarnBox();
+
+    // 基本輸入合法性先檢查，避免 NaN
+    const monthDays = Number($("days").value);
+    const start = Number($("start").value);
+    const c1 = Number($("count1").value);
+    const c2 = Number($("count2").value);
+
+    if (!Number.isInteger(monthDays) || monthDays <= 0 ||
+        !Number.isInteger(start) || start < 1 || start > 7 ||
+        !Number.isInteger(c1) || c1 < 0 ||
+        !Number.isInteger(c2) || c2 < 0) {
+      runBtn.disabled = true;
+      warnBox.innerHTML = `<span class="err">⚠️ 輸入格式不正確（天數/星期/班數需為整數且不可為負）</span>`;
+      return false;
+    }
+
+    const { gridDays } = getGridDays(monthDays, start);
+
+    let skipDates = [];
+    try {
+      skipDates = parseIntList($("skipDates").value);
+    } catch (e) {
+      runBtn.disabled = true;
+      warnBox.innerHTML = `<span class="err">⚠️ 免排班日期格式錯誤：</span>${e.message}`;
+      return false;
+    }
+
+    const skipCount = getUniqueValidSkipCount(skipDates, start, gridDays);
+    const requiredWorkDays = gridDays - skipCount;
+    const assigned = c1 + c2;
+
+    if (assigned !== requiredWorkDays) {
+      runBtn.disabled = true;
+      warnBox.innerHTML =
+        `<span class="err">⚠️ 班數總和不正確：</span>` +
+        `需要排班 <b>${gridDays}</b> 天（含星期日），免排 <b>${skipCount}</b> 天 → ` +
+        `實際需排 <b>${requiredWorkDays}</b> 天；` +
+        `但人員1+人員2 = <b>${assigned}</b>（${c1}+${c2}）。` +
+        `<div class="small">請調整「免排班日期」或兩位人員「預排班數」，使兩者相等。</div>`;
+      return false;
+    }
+
+    // OK
+    warnBox.innerHTML = `<span class="ok">✓ 班數總和正確：</span>實際需排 <b>${requiredWorkDays}</b> 天，已分配 <b>${assigned}</b> 天。`;
+    runBtn.disabled = false;
+    return true;
+  }
+
+  // ===== Scheduler Core =====
   let stopFlag = false;
 
   function solve(params) {
     let { monthDays, start, skipDates, people } = params;
 
-    // 新規格：grid days = 月天數 + 星期日天數
     const sundayCount = countSundaysInMonth(monthDays, start);
     const days = monthDays + sundayCount;
 
@@ -275,18 +357,12 @@
     const count = [0, people[1].count, people[2].count];
     const prev = [0, people[1].prev, people[2].prev];
 
-    function mapDateToIndex(k) {
-      // 沿用你原 C 的映射方式（正數/負數）
-      if (k < 0) {
-        const d = -k;
-        return d + Math.floor((d + start - 2) / 7) + 1;
-      } else {
-        return k + Math.floor((k + start - 2) / 7);
-      }
+    function mapDateToIndexLocal(k) {
+      return mapDateToIndex(k, start);
     }
 
     for (const d of skipDates) {
-      const idx = mapDateToIndex(d);
+      const idx = mapDateToIndexLocal(d);
       if (idx >= 1 && idx <= days) shift[idx] = 3;
     }
 
@@ -296,7 +372,7 @@
       for (let i = 1; i <= 12; i++) pt[p][i] = pts[i - 1];
 
       for (const d of people[p].noDates) {
-        const idx = mapDateToIndex(d);
+        const idx = mapDateToIndexLocal(d);
         if (idx >= 1 && idx <= days) no[p][idx] = 1;
       }
     }
@@ -444,14 +520,14 @@
         max = t;
         bestFound = true;
         outputEl.innerHTML = renderBest(t);
-        setStatus(`<span class="ok">找到更佳解</span> best score = <b>${t}</b>（grid days=${days}，月天數=${monthDays}，星期日=${sundayCount}）`, "hint");
+        setStatus(`<span class="ok">找到更佳解</span> best score = <b>${t}</b>（grid days=${days}）`, "hint");
       }
 
       today = days;
       back = 1;
     }
 
-    return { bestFound, bestScore: max, gridDays: days, sundayCount };
+    return { bestFound, bestScore: max, gridDays: days };
   }
 
   function setStatus(msg, cls="hint") {
@@ -470,13 +546,13 @@
     const p1 = {
       count: Number($("count1").value),
       prev: Number($("prev1").value),
-      pt: pt1UI.getPtArray(),               // << 改為從可視化 UI 產生
+      pt: pt1UI.getPtArray(),
       noDates: parseIntList($("no1").value),
     };
     const p2 = {
       count: Number($("count2").value),
       prev: Number($("prev2").value),
-      pt: pt2UI.getPtArray(),               // << 改為從可視化 UI 產生
+      pt: pt2UI.getPtArray(),
       noDates: parseIntList($("no2").value),
     };
 
@@ -489,6 +565,9 @@
   }
 
   async function run() {
+    // 新增：開始前再驗證一次（避免用 JS 繞過 disabled）
+    if (!validateTotalsAndToggleRun()) return;
+
     stopFlag = false;
     runBtn.disabled = true;
     stopBtn.disabled = false;
@@ -520,8 +599,9 @@
     } catch (e) {
       setStatus(`<span class="err">執行失敗：</span>${e.message}`, "err");
     } finally {
-      runBtn.disabled = false;
+      // 結束後恢復按鈕狀態，但仍要以驗證結果決定能否再次開始
       stopBtn.disabled = true;
+      validateTotalsAndToggleRun();
     }
   }
 
@@ -536,7 +616,6 @@
   }
 
   function loadDemo() {
-    // input.txt 範例1（用 UI 方式填入）
     $("days").value = 31;
     $("start").value = 5;
     $("skipDates").value = "17,-24";
@@ -549,33 +628,18 @@
     $("prev2").value = -4;
     $("no2").value = "0";
 
-    // 範例 pt：4,2,1,1,4,32,64,0,32,2,8,1024
-    // 但我們現在 pt=2^k，沒有 0 以外的任意數字；所以採「反推最接近的 k」
-    // 0 會變成 2^0=1（與原本 0 不同）。如果你希望 0 保留為 0，我也可以再改規則。
-    // 這裡就用對數近似：k = round(log2(v))，v=0 → k=0
-    function setPtApprox(uiWrapId, previewId, values) {
-      const wrap = $(uiWrapId);
-      const selects = wrap.querySelectorAll("select");
-      values.forEach((v, i) => {
-        const sel = selects[i];
-        let k = 0;
-        if (v > 0) k = Math.max(0, Math.min(10, Math.round(Math.log2(v))));
-        sel.value = String(k);
-        sel.dispatchEvent(new Event("change"));
-      });
-      $(previewId).textContent = values.map(v => String(v)).join(",");
-    }
-    const demoPt = [4,2,1,1,4,32,64,0,32,2,8,1024];
-    setPtApprox("ptUI1", "ptPreview1", demoPt);
-    setPtApprox("ptUI2", "ptPreview2", demoPt);
-
     updateGridDaysUI();
-    setStatus("已載入範例1（pt 已用 2^k 規則做近似設定）", "hint");
+    validateTotalsAndToggleRun();
+    setStatus("已載入範例1", "hint");
   }
 
-  // events
-  $("days").addEventListener("input", updateGridDaysUI);
-  $("start").addEventListener("change", updateGridDaysUI);
+  // ===== events =====
+  $("days").addEventListener("input", () => { updateGridDaysUI(); validateTotalsAndToggleRun(); });
+  $("start").addEventListener("change", () => { updateGridDaysUI(); validateTotalsAndToggleRun(); });
+
+  $("skipDates").addEventListener("input", validateTotalsAndToggleRun);
+  $("count1").addEventListener("input", validateTotalsAndToggleRun);
+  $("count2").addEventListener("input", validateTotalsAndToggleRun);
 
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stop);
@@ -587,5 +651,3 @@
   loadDemo();
 })();
 </script>
-</body>
-</html>
