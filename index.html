@@ -7,10 +7,10 @@
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", Arial, "Noto Sans TC", sans-serif; margin: 16px; line-height: 1.4; }
     h1 { margin: 0 0 12px; font-size: 22px; }
-    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 1100px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 1200px; }
     .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
-    .row { display: grid; grid-template-columns: 160px 1fr; gap: 10px; align-items: center; margin: 6px 0; }
-    input[type="number"], input[type="text"], textarea, select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+    .row { display: grid; grid-template-columns: 200px 1fr; gap: 10px; align-items: center; margin: 8px 0; }
+    input[type="number"], textarea, select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
     textarea { min-height: 70px; resize: vertical; }
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .btns { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -19,13 +19,13 @@
     button:disabled { opacity: .6; cursor: not-allowed; }
     .hint { color: #555; font-size: 13px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
-    th { background: #f7f7f7; }
     .ok { color: #0a7; }
     .warn { color: #b60; }
     .err { color: #c00; }
     .small { font-size: 12px; }
+    .ptGrid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
+    .ptRow { display: grid; grid-template-columns: 210px 120px 1fr; gap: 10px; align-items: center; }
+    .pill { display: inline-block; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; background: #fafafa; }
   </style>
 </head>
 <body>
@@ -34,31 +34,42 @@
   <div class="grid">
     <div class="card">
       <div class="row">
-        <div>當月天數（原始）</div>
-        <input id="days" type="number" min="1" max="31" value="30" />
+        <div>當月天數（28/29/30/31）</div>
+        <input id="days" type="number" min="1" max="31" value="31" />
       </div>
 
       <div class="row">
-        <div>起始星期 start</div>
+        <div>起始星期 start（1=一…7=日）</div>
         <select id="start">
           <option value="1">1（一）</option>
           <option value="2">2（二）</option>
           <option value="3">3（三）</option>
           <option value="4">4（四）</option>
-          <option value="5">5（五）</option>
+          <option value="5" selected>5（五）</option>
           <option value="6">6（六）</option>
           <option value="7">7（日）</option>
-          <option value="8">8（夜欄起始）</option>
         </select>
       </div>
 
       <div class="row">
+        <div>需要排班的天數（自動）</div>
+        <div>
+          <span class="pill">grid days = <b id="gridDays">-</b></span>
+          <span class="pill">星期日天數 = <b id="sunCount">-</b></span>
+          <div class="hint" style="margin-top:6px;">
+            依你的最新規格：<span class="mono">grid days = 月天數 + 星期日天數</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
         <div>免排班日期（shift=3）</div>
-        <textarea id="skipDates" class="mono" placeholder="例如：5,12,25  或  -1 表示用你原本的負數規則換算"></textarea>
+        <textarea id="skipDates" class="mono" placeholder="例如：17,-24 （逗號/空白/換行皆可）&#10;正數：星期日預設白班；負數：星期日夜班（沿用原本負數規則）"></textarea>
       </div>
 
       <div class="hint">
-        這個版本會沿用你原本 C 程式的日期換算規則：<span class="mono">k → k + floor((k+start-2)/7)</span>；負數也用同一套邏輯（見程式）。
+        日期輸入沿用你原 C 的換算規則（把「日期」映射成 grid index）。<br/>
+        你目前的 calc() 與限制條件仍依照 shift 陣列的 grid 位置運作。
       </div>
     </div>
 
@@ -68,23 +79,28 @@
 
         <div class="row">
           <div>班數 count[1]</div>
-          <input id="count1" type="number" min="0" value="15" />
+          <input id="count1" type="number" min="0" value="17" />
         </div>
 
         <div class="row">
           <div>上月底情形 prev[1]</div>
-          <input id="prev1" type="number" value="0" />
-        </div>
-
-        <div class="row">
-          <div>計分 pt[1][1..12]</div>
-          <textarea id="pt1" class="mono" placeholder="輸入 12 個整數，用逗號或空白分隔。例：1,2,3,4,5,6,7,8,9,10,11,12"></textarea>
+          <input id="prev1" type="number" value="4" />
         </div>
 
         <div class="row">
           <div>預不值班日期 no[1]</div>
-          <textarea id="no1" class="mono" placeholder="例如：3,7,10 或 -2,-1"></textarea>
+          <textarea id="no1" class="mono" placeholder="例如：7,8,25 或 0"></textarea>
         </div>
+
+        <div class="row">
+          <div>偏好設定（0–10 表示不想）</div>
+          <div>
+            <div class="hint">pt = 2^選單數字（自動換算）</div>
+            <div class="small">目前 pt[1]：<span class="mono" id="ptPreview1"></span></div>
+          </div>
+        </div>
+
+        <div id="ptUI1" class="ptGrid"></div>
       </div>
 
       <div class="card">
@@ -92,23 +108,28 @@
 
         <div class="row">
           <div>班數 count[2]</div>
-          <input id="count2" type="number" min="0" value="15" />
+          <input id="count2" type="number" min="0" value="17" />
         </div>
 
         <div class="row">
           <div>上月底情形 prev[2]</div>
-          <input id="prev2" type="number" value="0" />
-        </div>
-
-        <div class="row">
-          <div>計分 pt[2][1..12]</div>
-          <textarea id="pt2" class="mono" placeholder="輸入 12 個整數，用逗號或空白分隔。"></textarea>
+          <input id="prev2" type="number" value="-4" />
         </div>
 
         <div class="row">
           <div>預不值班日期 no[2]</div>
-          <textarea id="no2" class="mono" placeholder="例如：1,2,8 或 -3"></textarea>
+          <textarea id="no2" class="mono" placeholder="例如：0"></textarea>
         </div>
+
+        <div class="row">
+          <div>偏好設定（0–10 表示不想）</div>
+          <div>
+            <div class="hint">pt = 2^選單數字（自動換算）</div>
+            <div class="small">目前 pt[2]：<span class="mono" id="ptPreview2"></span></div>
+          </div>
+        </div>
+
+        <div id="ptUI2" class="ptGrid"></div>
       </div>
     </div>
 
@@ -116,7 +137,7 @@
       <div class="btns">
         <button id="runBtn">開始排班（找最低分）</button>
         <button id="stopBtn" class="secondary" disabled>停止</button>
-        <button id="loadDemoBtn" class="secondary">載入示範值</button>
+        <button id="loadDemoBtn" class="secondary">載入 input.txt 範例1</button>
         <button id="clearBtn" class="secondary">清空輸出</button>
       </div>
       <div id="status" class="hint" style="margin-top:10px;"></div>
@@ -130,7 +151,6 @@
 
 <script>
 (() => {
-  // ====== DOM ======
   const $ = (id) => document.getElementById(id);
   const runBtn = $("runBtn");
   const stopBtn = $("stopBtn");
@@ -139,14 +159,20 @@
   const statusEl = $("status");
   const outputEl = $("output");
 
-  // ====== Helpers ======
+  // 12 個偏好項目標籤（對應你說明）
+  const PT_LABELS = [
+    "上1天", "上2天", "上3天", "上4天", "上5天", "上6天",
+    "上7天", "上星期日白班", "休1天", "休2天", "休1.5天", "上>7天"
+  ];
+
+  // ===== Helpers =====
   function parseIntList(text) {
     if (!text || !text.trim()) return [];
     return text
       .replace(/\n/g, ",")
       .split(/[, ]+/)
       .map(s => s.trim())
-      .filter(s => s.length)
+      .filter(s => s.length && s !== "0")
       .map(s => {
         const v = Number(s);
         if (!Number.isFinite(v) || !Number.isInteger(v)) throw new Error(`不是整數：${s}`);
@@ -154,31 +180,112 @@
       });
   }
 
-  // ====== Scheduler Core (ported from C) ======
+  function pow2(n) { return 1 << n; } // 2^n，n=0..10 安全
+  function formatPt(arr) { return arr.map(v => String(v)).join(","); }
+
+  // ===== Auto grid days = monthDays + sundayCount =====
+  function countSundaysInMonth(monthDays, start) {
+    // start: 1=Mon ... 7=Sun
+    // Day d (1-based) weekday = ((start-1 + (d-1)) % 7) + 1
+    let c = 0;
+    for (let d = 1; d <= monthDays; d++) {
+      const wd = ((start - 1 + (d - 1)) % 7) + 1;
+      if (wd === 7) c++;
+    }
+    return c;
+  }
+
+  function updateGridDaysUI() {
+    const monthDays = Number($("days").value);
+    const start = Number($("start").value);
+    if (!Number.isInteger(monthDays) || monthDays <= 0) return;
+    if (!Number.isInteger(start) || start < 1 || start > 7) return;
+
+    const sunCount = countSundaysInMonth(monthDays, start);
+    const gridDays = monthDays + sunCount;
+
+    $("sunCount").textContent = String(sunCount);
+    $("gridDays").textContent = String(gridDays);
+  }
+
+  // ===== PT UI (0-10 select => pt = 2^k) =====
+  function buildPtUI(containerId, previewId, defaultLevels) {
+    const wrap = $(containerId);
+    wrap.innerHTML = "";
+
+    for (let i = 0; i < 12; i++) {
+      const row = document.createElement("div");
+      row.className = "ptRow";
+
+      const label = document.createElement("div");
+      label.textContent = `${i+1}. ${PT_LABELS[i]}`;
+
+      const sel = document.createElement("select");
+      sel.dataset.ptIndex = String(i);
+      for (let k = 0; k <= 10; k++) {
+        const opt = document.createElement("option");
+        opt.value = String(k);
+        opt.textContent = String(k);
+        sel.appendChild(opt);
+      }
+      sel.value = String(defaultLevels?.[i] ?? 0);
+
+      const computed = document.createElement("div");
+      computed.className = "hint mono";
+      computed.textContent = `pt=${pow2(Number(sel.value))}`;
+
+      sel.addEventListener("change", () => {
+        computed.textContent = `pt=${pow2(Number(sel.value))}`;
+        updatePtPreview();
+      });
+
+      row.appendChild(label);
+      row.appendChild(sel);
+      row.appendChild(computed);
+      wrap.appendChild(row);
+    }
+
+    function getPtArray() {
+      const selects = wrap.querySelectorAll("select");
+      const pt = [];
+      selects.forEach(s => {
+        const lvl = Number(s.value);
+        pt.push(pow2(lvl));
+      });
+      return pt;
+    }
+
+    function updatePtPreview() {
+      $(previewId).textContent = formatPt(getPtArray());
+    }
+
+    updatePtPreview();
+    return { getPtArray, updatePtPreview };
+  }
+
+  const pt1UI = buildPtUI("ptUI1", "ptPreview1", [2,1,0,0,2,5,6,0,5,1,3,10]); // 只是預設值，可改
+  const pt2UI = buildPtUI("ptUI2", "ptPreview2", [2,1,0,0,2,5,6,0,5,1,3,10]);
+
+  // ===== Scheduler Core (ported from C, but daysAdjusted changed to monthDays + sundayCount) =====
   let stopFlag = false;
 
   function solve(params) {
-    // Unpack
-    let { originalDays, start, skipDates, people } = params;
+    let { monthDays, start, skipDates, people } = params;
 
-    // C: days += (days + start - 1) / 7;
-    // 注意：C 是整數除法，所以等同 floor
-    let days = originalDays + Math.floor((originalDays + start - 1) / 7);
+    // 新規格：grid days = 月天數 + 星期日天數
+    const sundayCount = countSundaysInMonth(monthDays, start);
+    const days = monthDays + sundayCount;
 
-    // Arrays: shift[0..days], no[3][0..days], seq[3][0..days+?], pt[3][13]
-    const shift = new Array(days + 2).fill(0); // 0/1/2 (1,2 為人員；0=未排), 3=免排
+    const shift = new Array(days + 2).fill(0);
     const no = Array.from({ length: 3 }, () => new Array(days + 2).fill(0));
-    const seq = Array.from({ length: 3 }, () => new Array(days + 5).fill(0));
+    const seq = Array.from({ length: 3 }, () => new Array(days + 6).fill(0));
     const pt = Array.from({ length: 3 }, () => new Array(13).fill(0));
 
     const count = [0, people[1].count, people[2].count];
     const prev = [0, people[1].prev, people[2].prev];
 
-    // 日期換算：沿用 C 的邏輯
     function mapDateToIndex(k) {
-      // 原始 C：
-      // if (k < 0) { k = -k + (-k + start - 2) / 7 + 1; }
-      // else { k += (k + start - 2) / 7; }
+      // 沿用你原 C 的映射方式（正數/負數）
       if (k < 0) {
         const d = -k;
         return d + Math.floor((d + start - 2) / 7) + 1;
@@ -187,16 +294,14 @@
       }
     }
 
-    // 讀入：免排日期 shift[k]=3
     for (const d of skipDates) {
       const idx = mapDateToIndex(d);
       if (idx >= 1 && idx <= days) shift[idx] = 3;
     }
 
-    // 讀入 pt, no
     for (let p = 1; p <= 2; p++) {
       const pts = people[p].pt;
-      if (pts.length !== 12) throw new Error(`人員${p} 的 pt 需要 12 個整數`);
+      if (pts.length !== 12) throw new Error(`人員${p} 的 pt 需要 12 個數字`);
       for (let i = 1; i <= 12; i++) pt[p][i] = pts[i - 1];
 
       for (const d of people[p].noDates) {
@@ -205,27 +310,21 @@
       }
     }
 
-    // C: for (i = 0;i <= days;i++) { shift[i] -= shift[i] % 3; }
-    // 目的：讓 shift 值落在 0 或 3（因為 3%3=0）
-    for (let i = 0; i <= days; i++) {
-      shift[i] = shift[i] - (shift[i] % 3);
-    }
+    for (let i = 0; i <= days; i++) shift[i] = shift[i] - (shift[i] % 3);
 
-    // Globals in C
     let max = 1000;
     let today = 1;
     let back = 0;
     const sum = [0, 0, 0];
 
     function calc() {
-      // 統計 seq
       for (let k = 0; k <= 2; k++) {
         let n = 0;
         for (let i = 0; i <= days; i++) seq[k][i] = 0;
         seq[k][0] = prev[k];
 
         for (let i = 1; i <= days; i++) {
-          if (((start + i - 1) % 8) === 7) { // 星期日白班欄位（依原 C）
+          if (((start + i - 1) % 8) === 7) {
             if (shift[i] === k) {
               if (seq[k][n] > -50) seq[k][n] -= 50;
               n++;
@@ -243,13 +342,9 @@
       }
 
       let score = 0;
-
-      // 原 C 這段是 k=1..3（但實際只有 1..2 有資料）
       for (let k = 1; k <= 2; k++) {
         for (let i = 0; i <= days; i++) {
-          // 同時避免將未完成的排班算入計分
           if (today <= days && seq[k][i + 2] === 0) break;
-          // 避免將最後的休假算入計分
           if (seq[k][i] < 0 && seq[k][i + 1] === 0) break;
 
           const v = seq[k][i];
@@ -268,7 +363,6 @@
         }
       }
 
-      // 星期日白班平衡（僅在排完時）
       let kBal = 0;
       if (today > days) {
         for (let i = 8 - start; i <= days; i += 8) {
@@ -277,17 +371,14 @@
         }
         if ((kBal * kBal) > 2) score += 256;
       }
-
       return score;
     }
 
     function renderBest(bestScore) {
-      // 依你的 C print 版面輸出
       const header = ["一","二","三","四","五","六","日","夜"];
       let html = `<div class="mono"><div>-----------------------</div>`;
       html += `<div>${header.join(" ")}</div>`;
 
-      // 前置空格（用 &nbsp; 做簡單對齊）
       let line = "";
       for (let k = 1; k < start; k++) line += "   ";
 
@@ -303,7 +394,6 @@
 
       html += `<div>score=${bestScore}</div>`;
 
-      // 人員 1..2 的 seq 解釋（沿用你 C 的判讀）
       for (let k = 1; k <= 2; k++) {
         html += `<br/><div>人員${k}: `;
         if (prev[k] > 0 && shift[1] === k) html += `含上個月連`;
@@ -325,7 +415,6 @@
       return html;
     }
 
-    // 主演算法（照 C while(1) + 回溯 today）
     let bestFound = false;
 
     while (true) {
@@ -339,67 +428,64 @@
 
         if (shift[today] === 0) { shift[today] = 1; sum[1]++; }
         else if (shift[today] === 1) { shift[today] = 2; sum[1]--; sum[2]++; }
-        else if (shift[today] === 2) { shift[today] = 0; today--; back = 1; sum[2]--; } // 退一步
+        else if (shift[today] === 2) { shift[today] = 0; today--; back = 1; sum[2]--; }
 
         if (shift[today] === 3 && back === 0) { today++; continue; }
         if (shift[today] === 3 && back === 1) { today--; continue; }
         if (back === 1) continue;
 
-        if (no[shift[today]][today] === 1) continue; // 預不排班
+        if (no[shift[today]][today] === 1) continue;
         if (sum[1] > count[1]) continue;
         if (sum[2] > count[2]) continue;
 
-        // 24 小時班限制（照你原判斷：%8==7 或 %8==0 時，不可連續同人）
         if (((start + today - 1) % 8) === 7 && shift[today] === shift[today - 1]) continue;
         if (((start + today - 1) % 8) === 0 && shift[today] === shift[today - 1]) continue;
 
-        if (calc() >= max) continue; // 剪枝
+        if (calc() >= max) continue;
         today++;
       }
 
       if (stopFlag) break;
-
-      if (today < 1) break; // 全遍歷完成
+      if (today < 1) break;
 
       const t = calc();
       if (t < max) {
         max = t;
         bestFound = true;
         outputEl.innerHTML = renderBest(t);
-        statusEl.innerHTML = `<span class="ok">找到更佳解</span> best score = <b>${t}</b>（grid days=${days}, 原始 days=${originalDays}）`;
+        setStatus(`<span class="ok">找到更佳解</span> best score = <b>${t}</b>（grid days=${days}，月天數=${monthDays}，星期日=${sundayCount}）`, "hint");
       }
 
       today = days;
       back = 1;
     }
 
-    return { bestFound, bestScore: max, daysAdjusted: days };
+    return { bestFound, bestScore: max, gridDays: days, sundayCount };
   }
 
-  // ====== UI actions ======
   function setStatus(msg, cls="hint") {
     statusEl.className = cls;
     statusEl.innerHTML = msg;
   }
 
   function getParamsFromUI() {
-    const originalDays = Number($("days").value);
+    const monthDays = Number($("days").value);
     const start = Number($("start").value);
-    if (!Number.isInteger(originalDays) || originalDays <= 0) throw new Error("當月天數需為正整數");
-    if (!Number.isInteger(start) || start < 1 || start > 8) throw new Error("start 需在 1..8");
+    if (!Number.isInteger(monthDays) || monthDays <= 0) throw new Error("當月天數需為正整數");
+    if (!Number.isInteger(start) || start < 1 || start > 7) throw new Error("start 需在 1..7");
 
     const skipDates = parseIntList($("skipDates").value);
 
     const p1 = {
       count: Number($("count1").value),
       prev: Number($("prev1").value),
-      pt: parseIntList($("pt1").value),
+      pt: pt1UI.getPtArray(),               // << 改為從可視化 UI 產生
       noDates: parseIntList($("no1").value),
     };
     const p2 = {
       count: Number($("count2").value),
       prev: Number($("prev2").value),
-      pt: parseIntList($("pt2").value),
+      pt: pt2UI.getPtArray(),               // << 改為從可視化 UI 產生
       noDates: parseIntList($("no2").value),
     };
 
@@ -408,22 +494,16 @@
     if (!Number.isInteger(p1.prev)) throw new Error("人員1 prev 需為整數");
     if (!Number.isInteger(p2.prev)) throw new Error("人員2 prev 需為整數");
 
-    return {
-      originalDays,
-      start,
-      skipDates,
-      people: { 1: p1, 2: p2 }
-    };
+    return { monthDays, start, skipDates, people: {1:p1, 2:p2} };
   }
 
-  // 因為回溯可能很久，放到 setTimeout 讓 UI 先更新一次
   async function run() {
     stopFlag = false;
     runBtn.disabled = true;
     stopBtn.disabled = false;
 
     outputEl.innerHTML = "";
-    setStatus("運算中…（如果資料很大可能需要一段時間）", "hint");
+    setStatus("運算中…（如果條件很緊或天數較大，可能需要較久）", "hint");
 
     let params;
     try {
@@ -444,7 +524,7 @@
       } else if (!res.bestFound) {
         setStatus(`<span class="err">找不到可行解。</span>（請檢查班數/禁排/免排是否過度限制）`, "err");
       } else {
-        setStatus(`<span class="ok">完成。</span> best score = <b>${res.bestScore}</b>（grid days=${res.daysAdjusted}）`, "ok");
+        setStatus(`<span class="ok">完成。</span> best score = <b>${res.bestScore}</b>（grid days=${res.gridDays}）`, "ok");
       }
     } catch (e) {
       setStatus(`<span class="err">執行失敗：</span>${e.message}`, "err");
@@ -459,32 +539,60 @@
     setStatus(`<span class="warn">收到停止指令…</span>（會在下一個迴圈檢查點停下）`, "warn");
   }
 
-  function loadDemo() {
-    $("days").value = 30;
-    $("start").value = 1;
-    $("skipDates").value = " "; // 無免排
-    $("count1").value = 15;
-    $("count2").value = 15;
-    $("prev1").value = 0;
-    $("prev2").value = 0;
-    $("pt1").value = "1,2,3,4,5,6,7,8,9,10,11,12";
-    $("pt2").value = "1,2,3,4,5,6,7,8,9,10,11,12";
-    $("no1").value = " ";
-    $("no2").value = " ";
-    setStatus("已載入示範值（請依你的 input.txt 規格自行填入）", "hint");
-  }
-
   function clearOutput() {
     outputEl.innerHTML = "";
     setStatus("", "hint");
   }
+
+  function loadDemo() {
+    // input.txt 範例1（用 UI 方式填入）
+    $("days").value = 31;
+    $("start").value = 5;
+    $("skipDates").value = "17,-24";
+
+    $("count1").value = 17;
+    $("prev1").value = 4;
+    $("no1").value = "7,8,25";
+
+    $("count2").value = 17;
+    $("prev2").value = -4;
+    $("no2").value = "0";
+
+    // 範例 pt：4,2,1,1,4,32,64,0,32,2,8,1024
+    // 但我們現在 pt=2^k，沒有 0 以外的任意數字；所以採「反推最接近的 k」
+    // 0 會變成 2^0=1（與原本 0 不同）。如果你希望 0 保留為 0，我也可以再改規則。
+    // 這裡就用對數近似：k = round(log2(v))，v=0 → k=0
+    function setPtApprox(uiWrapId, previewId, values) {
+      const wrap = $(uiWrapId);
+      const selects = wrap.querySelectorAll("select");
+      values.forEach((v, i) => {
+        const sel = selects[i];
+        let k = 0;
+        if (v > 0) k = Math.max(0, Math.min(10, Math.round(Math.log2(v))));
+        sel.value = String(k);
+        sel.dispatchEvent(new Event("change"));
+      });
+      $(previewId).textContent = values.map(v => String(v)).join(",");
+    }
+    const demoPt = [4,2,1,1,4,32,64,0,32,2,8,1024];
+    setPtApprox("ptUI1", "ptPreview1", demoPt);
+    setPtApprox("ptUI2", "ptPreview2", demoPt);
+
+    updateGridDaysUI();
+    setStatus("已載入範例1（pt 已用 2^k 規則做近似設定）", "hint");
+  }
+
+  // events
+  $("days").addEventListener("input", updateGridDaysUI);
+  $("start").addEventListener("change", updateGridDaysUI);
 
   runBtn.addEventListener("click", run);
   stopBtn.addEventListener("click", stop);
   loadDemoBtn.addEventListener("click", loadDemo);
   clearBtn.addEventListener("click", clearOutput);
 
-  // 預設幫你填一點示範（避免 pt 沒填）
+  // init
+  updateGridDaysUI();
   loadDemo();
 })();
 </script>
