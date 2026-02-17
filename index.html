@@ -164,13 +164,11 @@
   const statusEl = $("status");
   const outputEl = $("output");
 
-  // 12 個偏好項目標籤（對應你說明）
   const PT_LABELS = [
     "上1天", "上2天", "上3天", "上4天", "上5天", "上6天",
     "上7天", "上星期日白班", "休1天", "休2天", "休1.5天", "上>7天"
   ];
 
-  // ===== Helpers =====
   function parseIntList(text) {
     if (!text || !text.trim()) return [];
     return text
@@ -185,14 +183,13 @@
       });
   }
 
-  function pow2(n) { return 1 << n; } // 2^n，n=0..10 安全
+  function pow2(n) { return 1 << n; }
   function formatPt(arr) { return arr.map(v => String(v)).join(","); }
 
-  // ===== Auto grid days = monthDays + sundayCount =====
   function countSundaysInMonth(monthDays, start) {
     let c = 0;
     for (let d = 1; d <= monthDays; d++) {
-      const wd = ((start - 1 + (d - 1)) % 7) + 1; // 1..7
+      const wd = ((start - 1 + (d - 1)) % 7) + 1;
       if (wd === 7) c++;
     }
     return c;
@@ -214,7 +211,6 @@
     $("gridDays").textContent = String(gridDays);
   }
 
-  // ===== PT UI (0-10 select => pt = 2^k) =====
   function buildPtUI(containerId, previewId, defaultLevels) {
     const wrap = $(containerId);
     wrap.innerHTML = "";
@@ -269,9 +265,8 @@
   const pt1UI = buildPtUI("ptUI1", "ptPreview1", [2,1,0,0,2,5,6,0,5,1,3,10]);
   const pt2UI = buildPtUI("ptUI2", "ptPreview2", [2,1,0,0,2,5,6,0,5,1,3,10]);
 
-  // ====== 新增：班數總和檢查 + 禁用排班 ======
+  // ===== 班數總和檢查 =====
   function mapDateToIndex(k, start) {
-    // 沿用你原 C 的映射方式（正數/負數）
     if (k < 0) {
       const d = -k;
       return d + Math.floor((d + start - 2) / 7) + 1;
@@ -281,7 +276,6 @@
   }
 
   function getUniqueValidSkipCount(skipDates, start, gridDays) {
-    // 將 skipDates 映射到 grid index，過濾 1..gridDays，並去重
     const s = new Set();
     for (const d of skipDates) {
       const idx = mapDateToIndex(d, start);
@@ -291,7 +285,6 @@
   }
 
   function ensureWarnBox() {
-    // 在按鈕區塊下方塞一個警告 div（只建立一次）
     let warn = $("warnBox");
     if (warn) return warn;
 
@@ -299,7 +292,6 @@
     warn.id = "warnBox";
     warn.style.marginTop = "8px";
     warn.className = "hint";
-    // 插在 statusEl 前面（也就是按鈕下方、status 上方/同區）
     statusEl.parentNode.insertBefore(warn, statusEl);
     return warn;
   }
@@ -307,7 +299,6 @@
   function validateTotalsAndToggleRun() {
     const warnBox = ensureWarnBox();
 
-    // 基本輸入合法性先檢查，避免 NaN
     const monthDays = Number($("days").value);
     const start = Number($("start").value);
     const c1 = Number($("count1").value);
@@ -348,7 +339,6 @@
       return false;
     }
 
-    // OK
     warnBox.innerHTML = `<span class="ok">✓ 班數總和正確：</span>實際需排 <b>${requiredWorkDays}</b> 天，已分配 <b>${assigned}</b> 天。`;
     runBtn.disabled = false;
     return true;
@@ -456,102 +446,88 @@
     }
 
     function renderBest(bestScore) {
-      // weekday: 1=Mon ... 7=Sun
       function weekdayOfDate(d) {
         return ((start - 1 + (d - 1)) % 7) + 1;
       }
-    
-      // 依你原本規則：正數日期 → base index；星期日夜班（負數）→ base+1
+
       function gridIndexOfDate(d, sundayNight = false) {
         const base = d + Math.floor((d + start - 2) / 7);
         return sundayNight ? (base + 1) : base;
       }
-    
+
       function fmtAssign(v) {
-        // shift: 0/1/2/3  (3=免排)
         if (v === 3) return { text: "免排", muted: true };
         if (v === 0) return { text: "—", muted: true };
         return { text: String(v), muted: false };
       }
-    
-      // ===== 月曆表格 =====
+
       const headers = ["一","二","三","四","五","六","日"];
       let html = `<div class="calWrap">`;
       html += `<div class="mono">score=${bestScore}</div>`;
       html += `<table class="calTable"><thead><tr>`;
       for (const h of headers) html += `<th>${h}</th>`;
       html += `</tr></thead><tbody>`;
-    
-      const monthDays = paramsMonthDays; // <-- 下面說明要怎麼給它
-      // 月曆第一格前面空幾天
-      const leadingBlanks = start - 1; // start=1(一) => 0 空格
-    
-      let day = 1;
-      let cellIndex = 0;
-      // 需要多少格（含前置空白）
+
+      const leadingBlanks = start - 1;
       const totalCells = leadingBlanks + monthDays;
       const totalWeeks = Math.ceil(totalCells / 7);
-    
+
+      let day = 1;
       for (let w = 0; w < totalWeeks; w++) {
         html += `<tr>`;
         for (let c = 0; c < 7; c++) {
-          cellIndex++;
-          const pos = (w * 7 + c); // 0-based in grid
+          const pos = (w * 7 + c);
           if (pos < leadingBlanks || day > monthDays) {
             html += `<td class="calCell"></td>`;
             continue;
           }
-    
+
           const wd = weekdayOfDate(day);
-    
+
           if (wd === 7) {
-            // Sunday split into day/night
             const idxDay = gridIndexOfDate(day, false);
             const idxNight = gridIndexOfDate(day, true);
-    
+
             const aDay = fmtAssign(shift[idxDay]);
             const aNight = fmtAssign(shift[idxNight]);
-    
+
             html += `<td class="calCell">`;
             html += `<div class="calDate">${day}</div>`;
             html += `<div class="sunSplit">`;
-    
+
             html += `<div class="sunDay">`;
             html += `<div class="sunLine"><span class="sunLabel">白</span><span class="calAssign ${aDay.muted ? "muted": ""}">${aDay.text}</span></div>`;
             html += `</div>`;
-    
+
             html += `<div class="sunNight">`;
             html += `<div class="sunLine"><span class="sunLabel">夜</span><span class="calAssign ${aNight.muted ? "muted": ""}">${aNight.text}</span></div>`;
             html += `</div>`;
-    
+
             html += `</div></td>`;
-    
           } else {
-            // Normal day: single cell
             const idx = gridIndexOfDate(day, false);
             const a = fmtAssign(shift[idx]);
-    
+
             html += `<td class="calCell">`;
             html += `<div class="calDate">${day}</div>`;
             html += `<div class="calAssign ${a.muted ? "muted": ""}">${a.text}</div>`;
             html += `</td>`;
           }
-    
+
           day++;
         }
         html += `</tr>`;
       }
-    
+
       html += `</tbody></table>`;
-    
-      // ===== 保留你原本的「各人員 seq 結果」輸出（可選）=====
+
+      // 人員 seq 摘要
       for (let k = 1; k <= 2; k++) {
         html += `<br/><div>人員${k}:</div><div class="small">`;
-    
         if (prev[k] > 0 && shift[1] === k) html += `含上個月連 `;
         else if (prev[k] < 0 && shift[1] !== k) html += `含上個月連 `;
         else if (prev[k] !== 0) html += `上個月 `;
-    
+
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
           if (v === 50) html += `星期天白班, `;
@@ -561,10 +537,59 @@
         }
         html += `</div>`;
       }
-    
+
       html += `</div>`;
       return html;
     }
+
+    // ======= 回溯主迴圈（你原本的） =======
+    let bestFound = false;
+
+    while (true) {
+      if (stopFlag) break;
+
+      while (today <= days && today > 0) {
+        if (stopFlag) break;
+
+        if (shift[today] === 3 && back === 1) { today--; continue; }
+        back = 0;
+
+        if (shift[today] === 0) { shift[today] = 1; sum[1]++; }
+        else if (shift[today] === 1) { shift[today] = 2; sum[1]--; sum[2]++; }
+        else if (shift[today] === 2) { shift[today] = 0; today--; back = 1; sum[2]--; }
+
+        if (shift[today] === 3 && back === 0) { today++; continue; }
+        if (shift[today] === 3 && back === 1) { today--; continue; }
+        if (back === 1) continue;
+
+        if (no[shift[today]][today] === 1) continue;
+        if (sum[1] > count[1]) continue;
+        if (sum[2] > count[2]) continue;
+
+        if (((start + today - 1) % 8) === 7 && shift[today] === shift[today - 1]) continue;
+        if (((start + today - 1) % 8) === 0 && shift[today] === shift[today - 1]) continue;
+
+        if (calc() >= max) continue;
+        today++;
+      }
+
+      if (stopFlag) break;
+      if (today < 1) break;
+
+      const t = calc();
+      if (t < max) {
+        max = t;
+        bestFound = true;
+        outputEl.innerHTML = renderBest(t);
+        setStatus(`<span class="ok">找到更佳解</span> best score = <b>${t}</b>`, "hint");
+      }
+
+      today = days;
+      back = 1;
+    }
+
+    return { bestFound, bestScore: max, gridDays: days };
+  }
 
   function setStatus(msg, cls="hint") {
     statusEl.className = cls;
@@ -601,7 +626,6 @@
   }
 
   async function run() {
-    // 新增：開始前再驗證一次（避免用 JS 繞過 disabled）
     if (!validateTotalsAndToggleRun()) return;
 
     stopFlag = false;
@@ -635,7 +659,6 @@
     } catch (e) {
       setStatus(`<span class="err">執行失敗：</span>${e.message}`, "err");
     } finally {
-      // 結束後恢復按鈕狀態，但仍要以驗證結果決定能否再次開始
       stopBtn.disabled = true;
       validateTotalsAndToggleRun();
     }
@@ -669,7 +692,6 @@
     setStatus("已載入範例1", "hint");
   }
 
-  // ===== events =====
   $("days").addEventListener("input", () => { updateGridDaysUI(); validateTotalsAndToggleRun(); });
   $("start").addEventListener("change", () => { updateGridDaysUI(); validateTotalsAndToggleRun(); });
 
@@ -682,7 +704,6 @@
   loadDemoBtn.addEventListener("click", loadDemo);
   clearBtn.addEventListener("click", clearOutput);
 
-  // init
   updateGridDaysUI();
   loadDemo();
 })();
