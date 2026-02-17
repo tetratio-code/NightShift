@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>排班最佳化（C 版演算法移植）</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Arial, "Noto Sans TC", sans-serif; margin: 16px; line-height: 1.4; }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 1100px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
+    .row { display: grid; grid-template-columns: 160px 1fr; gap: 10px; align-items: center; margin: 6px 0; }
+    input[type="number"], input[type="text"], textarea, select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+    textarea { min-height: 70px; resize: vertical; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #333; background: #111; color: #fff; cursor: pointer; }
+    button.secondary { background: #fff; color: #111; border-color: #777; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .hint { color: #555; font-size: 13px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+    th { background: #f7f7f7; }
+    .ok { color: #0a7; }
+    .warn { color: #b60; }
+    .err { color: #c00; }
+    .small { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>排班最佳化（移植你的 C 程式演算法）</h1>
+
+  <div class="grid">
+    <div class="card">
+      <div class="row">
+        <div>當月天數（原始）</div>
+        <input id="days" type="number" min="1" max="31" value="30" />
+      </div>
+
+      <div class="row">
+        <div>起始星期 start</div>
+        <select id="start">
+          <option value="1">1（一）</option>
+          <option value="2">2（二）</option>
+          <option value="3">3（三）</option>
+          <option value="4">4（四）</option>
+          <option value="5">5（五）</option>
+          <option value="6">6（六）</option>
+          <option value="7">7（日）</option>
+          <option value="8">8（夜欄起始）</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <div>免排班日期（shift=3）</div>
+        <textarea id="skipDates" class="mono" placeholder="例如：5,12,25  或  -1 表示用你原本的負數規則換算"></textarea>
+      </div>
+
+      <div class="hint">
+        這個版本會沿用你原本 C 程式的日期換算規則：<span class="mono">k → k + floor((k+start-2)/7)</span>；負數也用同一套邏輯（見程式）。
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="card">
+        <h3 style="margin:0 0 8px;">人員 1</h3>
+
+        <div class="row">
+          <div>班數 count[1]</div>
+          <input id="count1" type="number" min="0" value="15" />
+        </div>
+
+        <div class="row">
+          <div>上月底情形 prev[1]</div>
+          <input id="prev1" type="number" value="0" />
+        </div>
+
+        <div class="row">
+          <div>計分 pt[1][1..12]</div>
+          <textarea id="pt1" class="mono" placeholder="輸入 12 個整數，用逗號或空白分隔。例：1,2,3,4,5,6,7,8,9,10,11,12"></textarea>
+        </div>
+
+        <div class="row">
+          <div>預不值班日期 no[1]</div>
+          <textarea id="no1" class="mono" placeholder="例如：3,7,10 或 -2,-1"></textarea>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 8px;">人員 2</h3>
+
+        <div class="row">
+          <div>班數 count[2]</div>
+          <input id="count2" type="number" min="0" value="15" />
+        </div>
+
+        <div class="row">
+          <div>上月底情形 prev[2]</div>
+          <input id="prev2" type="number" value="0" />
+        </div>
+
+        <div class="row">
+          <div>計分 pt[2][1..12]</div>
+          <textarea id="pt2" class="mono" placeholder="輸入 12 個整數，用逗號或空白分隔。"></textarea>
+        </div>
+
+        <div class="row">
+          <div>預不值班日期 no[2]</div>
+          <textarea id="no2" class="mono" placeholder="例如：1,2,8 或 -3"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="btns">
+        <button id="runBtn">開始排班（找最低分）</button>
+        <button id="stopBtn" class="secondary" disabled>停止</button>
+        <button id="loadDemoBtn" class="secondary">載入示範值</button>
+        <button id="clearBtn" class="secondary">清空輸出</button>
+      </div>
+      <div id="status" class="hint" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px;">輸出</h3>
+      <div id="output"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ====== DOM ======
+  const $ = (id) => document.getElementById(id);
+  const runBtn = $("runBtn");
+  const stopBtn = $("stopBtn");
+  const loadDemoBtn = $("loadDemoBtn");
+  const clearBtn = $("clearBtn");
+  const statusEl = $("status");
+  const outputEl = $("output");
+
+  // ====== Helpers ======
+  function parseIntList(text) {
+    if (!text || !text.trim()) return [];
+    return text
+      .replace(/\n/g, ",")
+      .split(/[, ]+/)
+      .map(s => s.trim())
+      .filter(s => s.length)
+      .map(s => {
+        const v = Number(s);
+        if (!Number.isFinite(v) || !Number.isInteger(v)) throw new Error(`不是整數：${s}`);
+        return v;
+      });
+  }
+
+  // ====== Scheduler Core (ported from C) ======
+  let stopFlag = false;
+
+  function solve(params) {
+    // Unpack
+    let { originalDays, start, skipDates, people } = params;
+
+    // C: days += (days + start - 1) / 7;
+    // 注意：C 是整數除法，所以等同 floor
+    let days = originalDays + Math.floor((originalDays + start - 1) / 7);
+
+    // Arrays: shift[0..days], no[3][0..days], seq[3][0..days+?], pt[3][13]
+    const shift = new Array(days + 2).fill(0); // 0/1/2 (1,2 為人員；0=未排), 3=免排
+    const no = Array.from({ length: 3 }, () => new Array(days + 2).fill(0));
+    const seq = Array.from({ length: 3 }, () => new Array(days + 5).fill(0));
+    const pt = Array.from({ length: 3 }, () => new Array(13).fill(0));
+
+    const count = [0, people[1].count, people[2].count];
+    const prev = [0, people[1].prev, people[2].prev];
+
+    // 日期換算：沿用 C 的邏輯
+    function mapDateToIndex(k) {
+      // 原始 C：
+      // if (k < 0) { k = -k + (-k + start - 2) / 7 + 1; }
+      // else { k += (k + start - 2) / 7; }
+      if (k < 0) {
+        const d = -k;
+        return d + Math.floor((d + start - 2) / 7) + 1;
+      } else {
+        return k + Math.floor((k + start - 2) / 7);
+      }
+    }
+
+    // 讀入：免排日期 shift[k]=3
+    for (const d of skipDates) {
+      const idx = mapDateToIndex(d);
+      if (idx >= 1 && idx <= days) shift[idx] = 3;
+    }
+
+    // 讀入 pt, no
+    for (let p = 1; p <= 2; p++) {
+      const pts = people[p].pt;
+      if (pts.length !== 12) throw new Error(`人員${p} 的 pt 需要 12 個整數`);
+      for (let i = 1; i <= 12; i++) pt[p][i] = pts[i - 1];
+
+      for (const d of people[p].noDates) {
+        const idx = mapDateToIndex(d);
+        if (idx >= 1 && idx <= days) no[p][idx] = 1;
+      }
+    }
+
+    // C: for (i = 0;i <= days;i++) { shift[i] -= shift[i] % 3; }
+    // 目的：讓 shift 值落在 0 或 3（因為 3%3=0）
+    for (let i = 0; i <= days; i++) {
+      shift[i] = shift[i] - (shift[i] % 3);
+    }
+
+    // Globals in C
+    let max = 1000;
+    let today = 1;
+    let back = 0;
+    const sum = [0, 0, 0];
+
+    function calc() {
+      // 統計 seq
+      for (let k = 0; k <= 2; k++) {
+        let n = 0;
+        for (let i = 0; i <= days; i++) seq[k][i] = 0;
+        seq[k][0] = prev[k];
+
+        for (let i = 1; i <= days; i++) {
+          if (((start + i - 1) % 8) === 7) { // 星期日白班欄位（依原 C）
+            if (shift[i] === k) {
+              if (seq[k][n] > -50) seq[k][n] -= 50;
+              n++;
+              seq[k][n] = 50; n++;
+              seq[k][n] -= 50;
+            }
+          } else if (shift[i] === k) {
+            if (seq[k][n] < 0) n++;
+            seq[k][n] += 1;
+          } else if (shift[i] !== k) {
+            if (seq[k][n] > 0) n++;
+            seq[k][n] -= 1;
+          }
+        }
+      }
+
+      let score = 0;
+
+      // 原 C 這段是 k=1..3（但實際只有 1..2 有資料）
+      for (let k = 1; k <= 2; k++) {
+        for (let i = 0; i <= days; i++) {
+          // 同時避免將未完成的排班算入計分
+          if (today <= days && seq[k][i + 2] === 0) break;
+          // 避免將最後的休假算入計分
+          if (seq[k][i] < 0 && seq[k][i + 1] === 0) break;
+
+          const v = seq[k][i];
+          if (v === 1) score += pt[k][1];
+          else if (v === 2) score += pt[k][2];
+          else if (v === 3) score += pt[k][3];
+          else if (v === 4) score += pt[k][4];
+          else if (v === 5) score += pt[k][5];
+          else if (v === 6) score += pt[k][6];
+          else if (v === 7) score += pt[k][7];
+          else if (v === 50) score += pt[k][8];
+          else if (v === -1) score += pt[k][9];
+          else if (v === -51) score += pt[k][10];
+          else if (v === -2) score += pt[k][11];
+          else if (v > 7) score += pt[k][12];
+        }
+      }
+
+      // 星期日白班平衡（僅在排完時）
+      let kBal = 0;
+      if (today > days) {
+        for (let i = 8 - start; i <= days; i += 8) {
+          if (shift[i] === 1) kBal++;
+          if (shift[i] === 2) kBal--;
+        }
+        if ((kBal * kBal) > 2) score += 256;
+      }
+
+      return score;
+    }
+
+    function renderBest(bestScore) {
+      // 依你的 C print 版面輸出
+      const header = ["一","二","三","四","五","六","日","夜"];
+      let html = `<div class="mono"><div>-----------------------</div>`;
+      html += `<div>${header.join(" ")}</div>`;
+
+      // 前置空格（用 &nbsp; 做簡單對齊）
+      let line = "";
+      for (let k = 1; k < start; k++) line += "   ";
+
+      for (let k = 1; k <= days; k++) {
+        const v = shift[k];
+        line += String(v).padStart(2," ") + " ";
+        if (((k + start - 1) % 8) === 0 && k < days) {
+          html += `<div>${line.replace(/ /g,"&nbsp;")}</div>`;
+          line = "";
+        }
+      }
+      if (line.trim().length) html += `<div>${line.replace(/ /g,"&nbsp;")}</div>`;
+
+      html += `<div>score=${bestScore}</div>`;
+
+      // 人員 1..2 的 seq 解釋（沿用你 C 的判讀）
+      for (let k = 1; k <= 2; k++) {
+        html += `<br/><div>人員${k}: `;
+        if (prev[k] > 0 && shift[1] === k) html += `含上個月連`;
+        else if (prev[k] < 0 && shift[1] !== k) html += `含上個月連`;
+        else if (prev[k] !== 0) html += `上個月`;
+        html += `</div><div class="small">`;
+
+        for (let i = 0; i < days; i++) {
+          const v = seq[k][i];
+          if (v === 50) html += `星期天白班, `;
+          else if (v < -50) html += `休${(-50 - v)}.5天, `;
+          else if (v < 0) html += `休${(-v)}天, `;
+          else if (v > 0) html += `上${v}天, `;
+        }
+        html += `</div>`;
+      }
+
+      html += `</div>`;
+      return html;
+    }
+
+    // 主演算法（照 C while(1) + 回溯 today）
+    let bestFound = false;
+
+    while (true) {
+      if (stopFlag) break;
+
+      while (today <= days && today > 0) {
+        if (stopFlag) break;
+
+        if (shift[today] === 3 && back === 1) { today--; continue; }
+        back = 0;
+
+        if (shift[today] === 0) { shift[today] = 1; sum[1]++; }
+        else if (shift[today] === 1) { shift[today] = 2; sum[1]--; sum[2]++; }
+        else if (shift[today] === 2) { shift[today] = 0; today--; back = 1; sum[2]--; } // 退一步
+
+        if (shift[today] === 3 && back === 0) { today++; continue; }
+        if (shift[today] === 3 && back === 1) { today--; continue; }
+        if (back === 1) continue;
+
+        if (no[shift[today]][today] === 1) continue; // 預不排班
+        if (sum[1] > count[1]) continue;
+        if (sum[2] > count[2]) continue;
+
+        // 24 小時班限制（照你原判斷：%8==7 或 %8==0 時，不可連續同人）
+        if (((start + today - 1) % 8) === 7 && shift[today] === shift[today - 1]) continue;
+        if (((start + today - 1) % 8) === 0 && shift[today] === shift[today - 1]) continue;
+
+        if (calc() >= max) continue; // 剪枝
+        today++;
+      }
+
+      if (stopFlag) break;
+
+      if (today < 1) break; // 全遍歷完成
+
+      const t = calc();
+      if (t < max) {
+        max = t;
+        bestFound = true;
+        outputEl.innerHTML = renderBest(t);
+        statusEl.innerHTML = `<span class="ok">找到更佳解</span> best score = <b>${t}</b>（grid days=${days}, 原始 days=${originalDays}）`;
+      }
+
+      today = days;
+      back = 1;
+    }
+
+    return { bestFound, bestScore: max, daysAdjusted: days };
+  }
+
+  // ====== UI actions ======
+  function setStatus(msg, cls="hint") {
+    statusEl.className = cls;
+    statusEl.innerHTML = msg;
+  }
+
+  function getParamsFromUI() {
+    const originalDays = Number($("days").value);
+    const start = Number($("start").value);
+    if (!Number.isInteger(originalDays) || originalDays <= 0) throw new Error("當月天數需為正整數");
+    if (!Number.isInteger(start) || start < 1 || start > 8) throw new Error("start 需在 1..8");
+
+    const skipDates = parseIntList($("skipDates").value);
+
+    const p1 = {
+      count: Number($("count1").value),
+      prev: Number($("prev1").value),
+      pt: parseIntList($("pt1").value),
+      noDates: parseIntList($("no1").value),
+    };
+    const p2 = {
+      count: Number($("count2").value),
+      prev: Number($("prev2").value),
+      pt: parseIntList($("pt2").value),
+      noDates: parseIntList($("no2").value),
+    };
+
+    if (!Number.isInteger(p1.count) || p1.count < 0) throw new Error("人員1 班數需為非負整數");
+    if (!Number.isInteger(p2.count) || p2.count < 0) throw new Error("人員2 班數需為非負整數");
+    if (!Number.isInteger(p1.prev)) throw new Error("人員1 prev 需為整數");
+    if (!Number.isInteger(p2.prev)) throw new Error("人員2 prev 需為整數");
+
+    return {
+      originalDays,
+      start,
+      skipDates,
+      people: { 1: p1, 2: p2 }
+    };
+  }
+
+  // 因為回溯可能很久，放到 setTimeout 讓 UI 先更新一次
+  async function run() {
+    stopFlag = false;
+    runBtn.disabled = true;
+    stopBtn.disabled = false;
+
+    outputEl.innerHTML = "";
+    setStatus("運算中…（如果資料很大可能需要一段時間）", "hint");
+
+    let params;
+    try {
+      params = getParamsFromUI();
+    } catch (e) {
+      setStatus(`<span class="err">輸入錯誤：</span>${e.message}`, "err");
+      runBtn.disabled = false;
+      stopBtn.disabled = true;
+      return;
+    }
+
+    await new Promise(r => setTimeout(r, 0));
+
+    try {
+      const res = solve(params);
+      if (stopFlag) {
+        setStatus(`<span class="warn">已停止。</span>（可能已找到部分解）`, "warn");
+      } else if (!res.bestFound) {
+        setStatus(`<span class="err">找不到可行解。</span>（請檢查班數/禁排/免排是否過度限制）`, "err");
+      } else {
+        setStatus(`<span class="ok">完成。</span> best score = <b>${res.bestScore}</b>（grid days=${res.daysAdjusted}）`, "ok");
+      }
+    } catch (e) {
+      setStatus(`<span class="err">執行失敗：</span>${e.message}`, "err");
+    } finally {
+      runBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+  }
+
+  function stop() {
+    stopFlag = true;
+    setStatus(`<span class="warn">收到停止指令…</span>（會在下一個迴圈檢查點停下）`, "warn");
+  }
+
+  function loadDemo() {
+    $("days").value = 30;
+    $("start").value = 1;
+    $("skipDates").value = " "; // 無免排
+    $("count1").value = 15;
+    $("count2").value = 15;
+    $("prev1").value = 0;
+    $("prev2").value = 0;
+    $("pt1").value = "1,2,3,4,5,6,7,8,9,10,11,12";
+    $("pt2").value = "1,2,3,4,5,6,7,8,9,10,11,12";
+    $("no1").value = " ";
+    $("no2").value = " ";
+    setStatus("已載入示範值（請依你的 input.txt 規格自行填入）", "hint");
+  }
+
+  function clearOutput() {
+    outputEl.innerHTML = "";
+    setStatus("", "hint");
+  }
+
+  runBtn.addEventListener("click", run);
+  stopBtn.addEventListener("click", stop);
+  loadDemoBtn.addEventListener("click", loadDemo);
+  clearBtn.addEventListener("click", clearOutput);
+
+  // 預設幫你填一點示範（避免 pt 沒填）
+  loadDemo();
+})();
+</script>
+</body>
+</html>
