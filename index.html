@@ -462,12 +462,15 @@
       html += `<div>score=${bestScore}</div>`;
 
       for (let k = 1; k <= 2; k++) {
-        html += `<br/><div>人員${k}: `;
-        if (prev[k] > 0 && shift[1] === k) html += `含上個月連`;
-        else if (prev[k] < 0 && shift[1] !== k) html += `含上個月連`;
-        else if (prev[k] !== 0) html += `上個月`;
-        html += `</div><div class="small">`;
-
+        html += `<br/><div>人員${k}:<div class="small">`;
+      
+        if (prev[k] > 0 && shift[1] === k)
+          html += `含上個月連<br/>`;
+        else if (prev[k] < 0 && shift[1] !== k)
+          html += `含上個月連<br/>`;
+        else if (prev[k] !== 0)
+          html += `上個月<br/>`;
+      
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
           if (v === 50) html += `星期天白班, `;
@@ -475,7 +478,8 @@
           else if (v < 0) html += `休${(-v)}天, `;
           else if (v > 0) html += `上${v}天, `;
         }
-        html += `</div>`;
+      
+        html += `</div></div>`;
       }
 
       html += `</div>`;
