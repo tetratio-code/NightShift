@@ -26,6 +26,20 @@
     .ptGrid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
     .ptRow { display: grid; grid-template-columns: 210px 120px 1fr; gap: 10px; align-items: center; }
     .pill { display: inline-block; padding: 2px 8px; border: 1px solid #ddd; border-radius: 999px; font-size: 12px; background: #fafafa; }
+    .calWrap { margin-top: 8px; }
+    .calTable { border-collapse: collapse; width: 100%; table-layout: fixed; }
+    .calTable th, .calTable td { border: 1px solid #ddd; vertical-align: top; padding: 6px; }
+    .calTable th { background: #f7f7f7; font-weight: 600; }
+    .calCell { min-height: 84px; }
+    .calDate { font-size: 12px; color: #666; margin-bottom: 4px; }
+    .calAssign { font-size: 14px; font-weight: 600; }
+    .calAssign.muted { font-weight: 400; color: #aaa; }
+    
+    .sunSplit { border-radius: 8px; overflow: hidden; border: 1px solid #eee; }
+    .sunDay { padding: 6px; background: #fff7cc; }   /* 淺黃 */
+    .sunNight { padding: 6px; background: #dff1ff; } /* 淺藍 */
+    .sunLabel { font-size: 11px; color: #666; margin-right: 6px; }
+    .sunLine { display: flex; gap: 8px; align-items: baseline; }
   </style>
 </head>
 <body>
@@ -442,98 +456,115 @@
     }
 
     function renderBest(bestScore) {
-      const header = ["一","二","三","四","五","六","日","夜"];
-      let html = `<div class="mono"><div>-----------------------</div>`;
-      html += `<div>${header.join(" ")}</div>`;
-
-      let line = "";
-      for (let k = 1; k < start; k++) line += "   ";
-
-      for (let k = 1; k <= days; k++) {
-        const v = shift[k];
-        line += String(v).padStart(2," ") + " ";
-        if (((k + start - 1) % 8) === 0 && k < days) {
-          html += `<div>${line.replace(/ /g,"&nbsp;")}</div>`;
-          line = "";
-        }
+      // weekday: 1=Mon ... 7=Sun
+      function weekdayOfDate(d) {
+        return ((start - 1 + (d - 1)) % 7) + 1;
       }
-      if (line.trim().length) html += `<div>${line.replace(/ /g,"&nbsp;")}</div>`;
-
-      html += `<div>score=${bestScore}</div>`;
-
+    
+      // 依你原本規則：正數日期 → base index；星期日夜班（負數）→ base+1
+      function gridIndexOfDate(d, sundayNight = false) {
+        const base = d + Math.floor((d + start - 2) / 7);
+        return sundayNight ? (base + 1) : base;
+      }
+    
+      function fmtAssign(v) {
+        // shift: 0/1/2/3  (3=免排)
+        if (v === 3) return { text: "免排", muted: true };
+        if (v === 0) return { text: "—", muted: true };
+        return { text: String(v), muted: false };
+      }
+    
+      // ===== 月曆表格 =====
+      const headers = ["一","二","三","四","五","六","日"];
+      let html = `<div class="calWrap">`;
+      html += `<div class="mono">score=${bestScore}</div>`;
+      html += `<table class="calTable"><thead><tr>`;
+      for (const h of headers) html += `<th>${h}</th>`;
+      html += `</tr></thead><tbody>`;
+    
+      const monthDays = paramsMonthDays; // <-- 下面說明要怎麼給它
+      // 月曆第一格前面空幾天
+      const leadingBlanks = start - 1; // start=1(一) => 0 空格
+    
+      let day = 1;
+      let cellIndex = 0;
+      // 需要多少格（含前置空白）
+      const totalCells = leadingBlanks + monthDays;
+      const totalWeeks = Math.ceil(totalCells / 7);
+    
+      for (let w = 0; w < totalWeeks; w++) {
+        html += `<tr>`;
+        for (let c = 0; c < 7; c++) {
+          cellIndex++;
+          const pos = (w * 7 + c); // 0-based in grid
+          if (pos < leadingBlanks || day > monthDays) {
+            html += `<td class="calCell"></td>`;
+            continue;
+          }
+    
+          const wd = weekdayOfDate(day);
+    
+          if (wd === 7) {
+            // Sunday split into day/night
+            const idxDay = gridIndexOfDate(day, false);
+            const idxNight = gridIndexOfDate(day, true);
+    
+            const aDay = fmtAssign(shift[idxDay]);
+            const aNight = fmtAssign(shift[idxNight]);
+    
+            html += `<td class="calCell">`;
+            html += `<div class="calDate">${day}</div>`;
+            html += `<div class="sunSplit">`;
+    
+            html += `<div class="sunDay">`;
+            html += `<div class="sunLine"><span class="sunLabel">白</span><span class="calAssign ${aDay.muted ? "muted": ""}">${aDay.text}</span></div>`;
+            html += `</div>`;
+    
+            html += `<div class="sunNight">`;
+            html += `<div class="sunLine"><span class="sunLabel">夜</span><span class="calAssign ${aNight.muted ? "muted": ""}">${aNight.text}</span></div>`;
+            html += `</div>`;
+    
+            html += `</div></td>`;
+    
+          } else {
+            // Normal day: single cell
+            const idx = gridIndexOfDate(day, false);
+            const a = fmtAssign(shift[idx]);
+    
+            html += `<td class="calCell">`;
+            html += `<div class="calDate">${day}</div>`;
+            html += `<div class="calAssign ${a.muted ? "muted": ""}">${a.text}</div>`;
+            html += `</td>`;
+          }
+    
+          day++;
+        }
+        html += `</tr>`;
+      }
+    
+      html += `</tbody></table>`;
+    
+      // ===== 保留你原本的「各人員 seq 結果」輸出（可選）=====
       for (let k = 1; k <= 2; k++) {
-        html += `<br/><div>人員${k}:</div>`;
-        html += `<div class="small">`;
-      
-        if (prev[k] > 0 && shift[1] === k)
-          html += `含上個月連`;
-        else if (prev[k] < 0 && shift[1] !== k)
-          html += `含上個月連`;
-        else if (prev[k] !== 0)
-          html += `上個月`;
-      
+        html += `<br/><div>人員${k}:</div><div class="small">`;
+    
+        if (prev[k] > 0 && shift[1] === k) html += `含上個月連 `;
+        else if (prev[k] < 0 && shift[1] !== k) html += `含上個月連 `;
+        else if (prev[k] !== 0) html += `上個月 `;
+    
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
           if (v === 50) html += `星期天白班, `;
-          else if (v < -50) html += `隔${(-50 - v)}.5天, `;
+          else if (v < -50) html += `休${(-50 - v)}.5天, `;
           else if (v < 0) html += `休${(-v)}天, `;
           else if (v > 0) html += `上${v}天, `;
         }
-      
         html += `</div>`;
       }
-
+    
       html += `</div>`;
       return html;
     }
-
-    let bestFound = false;
-
-    while (true) {
-      if (stopFlag) break;
-
-      while (today <= days && today > 0) {
-        if (stopFlag) break;
-
-        if (shift[today] === 3 && back === 1) { today--; continue; }
-        back = 0;
-
-        if (shift[today] === 0) { shift[today] = 1; sum[1]++; }
-        else if (shift[today] === 1) { shift[today] = 2; sum[1]--; sum[2]++; }
-        else if (shift[today] === 2) { shift[today] = 0; today--; back = 1; sum[2]--; }
-
-        if (shift[today] === 3 && back === 0) { today++; continue; }
-        if (shift[today] === 3 && back === 1) { today--; continue; }
-        if (back === 1) continue;
-
-        if (no[shift[today]][today] === 1) continue;
-        if (sum[1] > count[1]) continue;
-        if (sum[2] > count[2]) continue;
-
-        if (((start + today - 1) % 8) === 7 && shift[today] === shift[today - 1]) continue;
-        if (((start + today - 1) % 8) === 0 && shift[today] === shift[today - 1]) continue;
-
-        if (calc() >= max) continue;
-        today++;
-      }
-
-      if (stopFlag) break;
-      if (today < 1) break;
-
-      const t = calc();
-      if (t < max) {
-        max = t;
-        bestFound = true;
-        outputEl.innerHTML = renderBest(t);
-        setStatus(`<span class="ok">找到更佳解</span> best score = <b>${t}</b>（grid days=${days}）`, "hint");
-      }
-
-      today = days;
-      back = 1;
-    }
-
-    return { bestFound, bestScore: max, gridDays: days };
-  }
 
   function setStatus(msg, cls="hint") {
     statusEl.className = cls;
