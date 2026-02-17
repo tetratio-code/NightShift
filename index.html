@@ -43,7 +43,7 @@
   </style>
 </head>
 <body>
-  <h1>夜班排班小精靈</h1>
+  <h1>夜班排班小精靈.</h1>
 
   <div class="grid">
     <div class="card">
@@ -543,10 +543,35 @@
         if (prev[k] > 0 && shift[1] === k) html += `含上個月連`;
         else if (prev[k] < 0 && shift[1] !== k) html += `含上個月連`;
         else if (prev[k] !== 0) html += `上個月`;
-
+      
+        // ===== 新策略：若星期天白班是最後一天，則不印出其後的 .5 系列 =====
+        let lastSundayWB = -1;
+        for (let i = 0; i < days; i++) {
+          if (seq[k][i] === 50) lastSundayWB = i;
+        }
+      
+        let suppressHalfAfter = -1;
+        if (lastSundayWB >= 0) {
+          let hasAnythingAfter = false;
+          for (let i = lastSundayWB + 1; i < days; i++) {
+            const v = seq[k][i];
+            if (v === 0 || v === -150) continue; // 空/標記不算
+            // 只要後面有任何可輸出的段，就代表不是「排班最後一天」
+            hasAnythingAfter = true;
+            break;
+          }
+          if (!hasAnythingAfter) suppressHalfAfter = lastSundayWB;
+        }
+      
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
           if (v === -150) continue;
+      
+          // 若星期天白班是最後一天：抑制其後所有 .5 類型輸出
+          if (suppressHalfAfter >= 0 && i > suppressHalfAfter) {
+            if (v === -51 || v === -151 || v < -50) continue; // 全部 .5 系列都跳過
+          }
+      
           if (v === 50) html += `星期天白班, `;
           else if (v === -51) html += `夜接日隔1.5天, `;
           else if (v === -151) html += `日接夜隔1.5天, `;
@@ -555,12 +580,9 @@
           else if (v < 0) html += `休${(-v)}天, `;
           else if (v > 0) html += `上${v}天, `;
         }
+      
         html += `</div>`;
       }
-
-      html += `</div>`;
-      return html;
-    }
 
     // ======= 回溯主迴圈（你原本的） =======
     let bestFound = false;
