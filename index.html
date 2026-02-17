@@ -43,7 +43,7 @@
   </style>
 </head>
 <body>
-  <h1>夜班排班小精靈.</h1>
+  <h1>夜班排班小精靈</h1>
 
   <div class="grid">
     <div class="card">
@@ -546,31 +546,32 @@
         if (prev[k] > 0 && shift[1] === k) html += `含上個月連`;
         else if (prev[k] < 0 && shift[1] !== k) html += `含上個月連`;
         else if (prev[k] !== 0) html += `上個月`;
-
-        // 新策略：若星期天白班是排班最後一天，則後方接的 .5 系列都不印出
-        let lastSundayWB = -1;
-        for (let i = 0; i < days; i++) if (seq[k][i] === 50) lastSundayWB = i;
-
-        let suppressHalfAfter = -1;
-        if (lastSundayWB >= 0) {
-          let hasAnythingAfter = false;
-          for (let i = lastSundayWB + 1; i < days; i++) {
-            const v = seq[k][i];
-            if (v === 0 || v === -150) continue;
-            hasAnythingAfter = true;
-            break;
-          }
-          if (!hasAnythingAfter) suppressHalfAfter = lastSundayWB;
+        
+        let lastIdx = -1;
+        let prevIdx = -1;
+        
+        // 找最後/倒數第二個「有意義」段落（排除 0、-150）
+        for (let i = 0; i < days; i++) {
+          const v = seq[k][i];
+          if (v === 0 || v === -150) continue;
+          prevIdx = lastIdx;
+          lastIdx = i;
         }
-
+        
+        // 條件：最後是 -151，而且前一個有意義 token 是 50（星期天白班）→ 尾巴不印
+        const dropTrailing151 =
+          lastIdx >= 0 &&
+          prevIdx >= 0 &&
+          seq[k][lastIdx] === -151 &&
+          seq[k][prevIdx] === 50;
+        
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
           if (v === -150) continue;
-
-          if (suppressHalfAfter >= 0 && i > suppressHalfAfter) {
-            if (v === -51 || v === -151 || v < -50) continue;
-          }
-
+        
+          // 只把尾端那個「多餘的 -151」吃掉
+          if (dropTrailing151 && i === lastIdx) continue;
+        
           if (v === 50) html += `星期天白班, `;
           else if (v === -51) html += `夜接日隔1.5天, `;
           else if (v === -151) html += `日接夜隔1.5天, `;
