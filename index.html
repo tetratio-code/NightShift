@@ -198,7 +198,7 @@
   function countSundaysInMonth(monthDays, start) {
     let c = 0;
     for (let d = 1; d <= monthDays; d++) {
-      const wd = ((start - 1 + (d - 1)) % 7) + 1;
+      const wd = ((start - 1 + (d - 1)) % 7) + 1; // 1..7
       if (wd === 7) c++;
     }
     return c;
@@ -229,7 +229,7 @@
       row.className = "ptRow";
 
       const label = document.createElement("div");
-      label.textContent = `${i+1}. ${PT_LABELS[i]}`;
+      label.textContent = `${i + 1}. ${PT_LABELS[i]}`;
 
       const sel = document.createElement("select");
       sel.dataset.ptIndex = String(i);
@@ -276,6 +276,7 @@
 
   // ===== 班數總和檢查 =====
   function mapDateToIndex(k, start) {
+    // 正數：日白班；負數：日夜班（沿用你原 C 映射）
     if (k < 0) {
       const d = -k;
       return d + Math.floor((d + start - 2) / 7) + 1;
@@ -348,7 +349,8 @@
       return false;
     }
 
-    warnBox.innerHTML = `<span class="ok">✓ 班數總和正確：</span>實際需排 <b>${requiredWorkDays}</b> 班，已分配 <b>${assigned}</b> 班。`;
+    warnBox.innerHTML =
+      `<span class="ok">✓ 班數總和正確：</span>實際需排 <b>${requiredWorkDays}</b> 班，已分配 <b>${assigned}</b> 班。`;
     runBtn.disabled = false;
     return true;
   }
@@ -357,7 +359,7 @@
   let stopFlag = false;
 
   function solve(params) {
-    let { monthDays, start, skipDates, people } = params;
+    const { monthDays, start, skipDates, people } = params;
 
     const sundayCount = countSundaysInMonth(monthDays, start);
     const days = monthDays + sundayCount;
@@ -365,7 +367,7 @@
     const shift = new Array(days + 2).fill(0);
     const no = Array.from({ length: 3 }, () => new Array(days + 2).fill(0));
     const seq = Array.from({ length: 3 }, () => new Array(days + 6).fill(0));
-    const pt = Array.from({ length: 3 }, () => new Array(14).fill(0));
+    const pt = Array.from({ length: 3 }, () => new Array(14).fill(0)); // 1..13
 
     const count = [0, people[1].count, people[2].count];
     const prev = [0, people[1].prev, people[2].prev];
@@ -390,6 +392,7 @@
       }
     }
 
+    // shift 值落在 0 或 3（保留免排）
     for (let i = 0; i <= days; i++) shift[i] = shift[i] - (shift[i] % 3);
 
     let max = 1000;
@@ -403,51 +406,51 @@
         let n = 0;
         for (let i = 0; i <= days; i++) seq[k][i] = 0;
         seq[k][0] = prev[k];
-    
+
         for (let i = 1; i <= days; i++) {
-          if (((start + i - 1) % 8) === 7) {
+          if (((start + i - 1) % 8) === 7) { // 星期日白班欄位（依原 C）
             if (shift[i] === k) {
-              if (seq[k][n] > -50) seq[k][n] -= 50; // 五→日 隔1.5 的來源（-51）
+              if (seq[k][n] > -50) seq[k][n] -= 50; // 五→日隔1.5 的來源（-51）
               n++;
               seq[k][n] = 50; n++;                  // 星期日白班
-              seq[k][n] = -150;  // 先放一個「待啟動」標記
+              seq[k][n] = -150;                     // 待啟動標記：可能會變 -151 或被清掉
             }
           } else if (shift[i] === k) {
-          // 如果前一段是星期日白班後留下的 -150 標記，
-          // 而下一格又是上班，代表根本沒有「日→一隔1.5休假段」要表達
-          if (seq[k][n] === -150) {
-            seq[k][n] = 0;        // 直接清掉標記
-          }
-          if (seq[k][n] < 0) n++;
-          seq[k][n] += 1;
-        } else {
+            // 若前一格剛插入 Sunday WB 的 -150 標記，而下一格又是上班：不應產生日→一隔1.5
+            if (seq[k][n] === -150) seq[k][n] = 0;
+
+            if (seq[k][n] < 0) n++;
+            seq[k][n] += 1;
+          } else {
             if (seq[k][n] > 0) n++;
-          
-            // 如果剛插入過星期日白班，這裡第一次進入休假段，才算日→一隔1.5
+
+            // 若剛插入過 Sunday WB，第一次進入休假段才算日→一隔1.5
             if (seq[k][n] === -150) seq[k][n] = -151;
             else seq[k][n] -= 1;
           }
         }
       }
-    
+
       // 2) 計分
       let score = 0;
       for (let k = 1; k <= 2; k++) {
         for (let i = 0; i <= days; i++) {
           if (today <= days && seq[k][i + 2] === 0) break;
           if (seq[k][i] < 0 && seq[k][i + 1] === 0) break;
+
           const v = seq[k][i];
-          if (v === -150) continue;
-          if (v >= 1 && v <= 7) score += pt[k][v];
-          else if (v === 50) score += pt[k][11];        // 星期日白班
-          else if (v === -51) score += pt[k][12];       // 五→日 隔1.5天
-          else if (v === -151) score += pt[k][13];      // 日→一 隔1.5天
-          else if (v === -1) score += pt[k][9];
-          else if (v === -2) score += pt[k][10];
-          else if (v > 7 && v < 50) score += pt[k][8];  // 上>7天（避免吃到 50）
+
+          if (v === -150) continue;                 // 標記不計分
+          if (v >= 1 && v <= 7) score += pt[k][v];  // 上1..7
+          else if (v === 50) score += pt[k][11];    // 星期日白班
+          else if (v === -51) score += pt[k][12];   // 五→日隔1.5
+          else if (v === -151) score += pt[k][13];  // 日→一隔1.5
+          else if (v === -1) score += pt[k][9];     // 休1
+          else if (v === -2) score += pt[k][10];    // 休2
+          else if (v > 7 && v < 50) score += pt[k][8]; // 上>7（避免吃到 50）
         }
       }
-    
+
       // 3) 星期日白班平衡（只在排完時）
       let kBal = 0;
       if (today > days) {
@@ -457,7 +460,7 @@
         }
         if ((kBal * kBal) > 2) score += 256;
       }
-    
+
       return score;
     }
 
@@ -543,35 +546,31 @@
         if (prev[k] > 0 && shift[1] === k) html += `含上個月連`;
         else if (prev[k] < 0 && shift[1] !== k) html += `含上個月連`;
         else if (prev[k] !== 0) html += `上個月`;
-      
-        // ===== 新策略：若星期天白班是最後一天，則不印出其後的 .5 系列 =====
+
+        // 新策略：若星期天白班是排班最後一天，則後方接的 .5 系列都不印出
         let lastSundayWB = -1;
-        for (let i = 0; i < days; i++) {
-          if (seq[k][i] === 50) lastSundayWB = i;
-        }
-      
+        for (let i = 0; i < days; i++) if (seq[k][i] === 50) lastSundayWB = i;
+
         let suppressHalfAfter = -1;
         if (lastSundayWB >= 0) {
           let hasAnythingAfter = false;
           for (let i = lastSundayWB + 1; i < days; i++) {
             const v = seq[k][i];
-            if (v === 0 || v === -150) continue; // 空/標記不算
-            // 只要後面有任何可輸出的段，就代表不是「排班最後一天」
+            if (v === 0 || v === -150) continue;
             hasAnythingAfter = true;
             break;
           }
           if (!hasAnythingAfter) suppressHalfAfter = lastSundayWB;
         }
-      
+
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
           if (v === -150) continue;
-      
-          // 若星期天白班是最後一天：抑制其後所有 .5 類型輸出
+
           if (suppressHalfAfter >= 0 && i > suppressHalfAfter) {
-            if (v === -51 || v === -151 || v < -50) continue; // 全部 .5 系列都跳過
+            if (v === -51 || v === -151 || v < -50) continue;
           }
-      
+
           if (v === 50) html += `星期天白班, `;
           else if (v === -51) html += `夜接日隔1.5天, `;
           else if (v === -151) html += `日接夜隔1.5天, `;
@@ -580,11 +579,15 @@
           else if (v < 0) html += `休${(-v)}天, `;
           else if (v > 0) html += `上${v}天, `;
         }
-      
+
         html += `</div>`;
       }
 
-    // ======= 回溯主迴圈（你原本的） =======
+      html += `</div>`;
+      return html;
+    }
+
+    // ======= 回溯主迴圈 =======
     let bestFound = false;
 
     while (true) {
@@ -608,6 +611,7 @@
         if (sum[1] > count[1]) continue;
         if (sum[2] > count[2]) continue;
 
+        // 24 小時班限制（依原判斷）
         if (((start + today - 1) % 8) === 7 && shift[today] === shift[today - 1]) continue;
         if (((start + today - 1) % 8) === 0 && shift[today] === shift[today - 1]) continue;
 
@@ -633,19 +637,19 @@
     return { bestFound, bestScore: max, gridDays: days };
   }
 
-  function setStatus(msg, cls="hint") {
+  function setStatus(msg, cls = "hint") {
     statusEl.className = cls;
     statusEl.innerHTML = msg;
   }
-  
+
   function parseOptionalInt(v) {
     const s = String(v ?? "").trim();
-    if (s === "") return 0;              // 空白 → 0
+    if (s === "") return 0; // 空白 → 0
     const n = Number(s);
-    if (!Number.isFinite(n) || !Number.isInteger(n)) return 0;  // 不合法 → 0（或你想丟錯也可以）
+    if (!Number.isFinite(n) || !Number.isInteger(n)) return 0;
     return n;
   }
-  
+
   function getParamsFromUI() {
     const monthDays = Number($("days").value);
     const start = Number($("start").value);
@@ -670,7 +674,7 @@
     if (!Number.isInteger(p1.count) || p1.count < 0) throw new Error("人員1 班數需為非負整數");
     if (!Number.isInteger(p2.count) || p2.count < 0) throw new Error("人員2 班數需為非負整數");
 
-    return { monthDays, start, skipDates, people: {1:p1, 2:p2} };
+    return { monthDays, start, skipDates, people: { 1: p1, 2: p2 } };
   }
 
   async function run() {
@@ -709,6 +713,7 @@
     } finally {
       stopBtn.disabled = true;
       validateTotalsAndToggleRun();
+      runBtn.disabled = !validateTotalsAndToggleRun();
     }
   }
 
@@ -740,9 +745,9 @@
     setStatus("已載入範例1", "hint");
   }
 
+  // events
   $("days").addEventListener("input", () => { updateGridDaysUI(); validateTotalsAndToggleRun(); });
   $("start").addEventListener("change", () => { updateGridDaysUI(); validateTotalsAndToggleRun(); });
-
   $("skipDates").addEventListener("input", validateTotalsAndToggleRun);
   $("count1").addEventListener("input", validateTotalsAndToggleRun);
   $("count2").addEventListener("input", validateTotalsAndToggleRun);
@@ -752,6 +757,7 @@
   loadDemoBtn.addEventListener("click", loadDemo);
   clearBtn.addEventListener("click", clearOutput);
 
+  // init
   updateGridDaysUI();
   loadDemo();
 })();
