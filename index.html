@@ -436,12 +436,8 @@
         for (let i = 0; i <= days; i++) {
           if (today <= days && seq[k][i + 2] === 0) break;
           if (seq[k][i] < 0 && seq[k][i + 1] === 0) break;
-        
           const v = seq[k][i];
-        
-          // -150 是「待啟動標記」，完全不計分
           if (v === -150) continue;
-        
           if (v >= 1 && v <= 7) score += pt[k][v];
           else if (v === 50) score += pt[k][11];        // 星期日白班
           else if (v === -51) score += pt[k][12];       // 五→日 隔1.5天
@@ -550,6 +546,7 @@
 
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
+          if (v === -150) continue;
           if (v === 50) html += `星期天白班, `;
           else if (v === -51) html += `夜接日隔1.5天, `;
           else if (v === -151) html += `日接夜隔1.5天, `;
