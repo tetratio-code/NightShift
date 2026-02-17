@@ -475,7 +475,7 @@
         for (let i = 0; i < days; i++) {
           const v = seq[k][i];
           if (v === 50) html += `星期天白班, `;
-          else if (v < -50) html += `休${(-50 - v)}.5天, `;
+          else if (v < -50) html += `隔${(-50 - v)}.5天, `;
           else if (v < 0) html += `休${(-v)}天, `;
           else if (v > 0) html += `上${v}天, `;
         }
