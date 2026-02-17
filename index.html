@@ -605,7 +605,15 @@
     statusEl.className = cls;
     statusEl.innerHTML = msg;
   }
-
+  
+  function parseOptionalInt(v) {
+    const s = String(v ?? "").trim();
+    if (s === "") return 0;              // 空白 → 0
+    const n = Number(s);
+    if (!Number.isFinite(n) || !Number.isInteger(n)) return 0;  // 不合法 → 0（或你想丟錯也可以）
+    return n;
+  }
+  
   function getParamsFromUI() {
     const monthDays = Number($("days").value);
     const start = Number($("start").value);
@@ -616,21 +624,19 @@
 
     const p1 = {
       count: Number($("count1").value),
-      prev: Number($("prev1").value),
+      prev: parseOptionalInt($("prev1").value),
       pt: pt1UI.getPtArray(),
       noDates: parseIntList($("no1").value),
     };
     const p2 = {
       count: Number($("count2").value),
-      prev: Number($("prev2").value),
+      prev: parseOptionalInt($("prev2").value),
       pt: pt2UI.getPtArray(),
       noDates: parseIntList($("no2").value),
     };
 
     if (!Number.isInteger(p1.count) || p1.count < 0) throw new Error("人員1 班數需為非負整數");
     if (!Number.isInteger(p2.count) || p2.count < 0) throw new Error("人員2 班數需為非負整數");
-    if (!Number.isInteger(p1.prev)) throw new Error("人員1 prev 需為整數");
-    if (!Number.isInteger(p2.prev)) throw new Error("人員2 prev 需為整數");
 
     return { monthDays, start, skipDates, people: {1:p1, 2:p2} };
   }
